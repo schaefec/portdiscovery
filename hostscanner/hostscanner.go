@@ -1,4 +1,4 @@
-package main
+package hostscanner
 
 import (
 	"crypto/tls"
@@ -8,11 +8,13 @@ import (
 	"time"
 )
 
+// Scanner represents a port-scanner on tcp ports.
 type Scanner struct {
 	WaitGroup *sync.WaitGroup
-	States    chan<- tls.Connection
+	States    chan<- tls.ConnectionState
 }
 
+// New creates a new scanner
 func New(wg *sync.WaitGroup) *Scanner {
 	return &Scanner{
 		WaitGroup: wg,
@@ -20,11 +22,12 @@ func New(wg *sync.WaitGroup) *Scanner {
 	}
 }
 
+// Enqueue adds an additional hostport to to the list of to be scanned hosts
 func (s *Scanner) Enqueue(hostport string) {
-	go dialTLS(hostport, s.States)
+	go dialTLSInternal(hostport, s.States, s.WaitGroup)
 }
 
-func dialTLS(hostport string, ch chan<- tls.ConnectionState) {
+func dialTLSInternal(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup) {
 	defer wg.Done()
 	fmt.Println("Connecting to:", hostport)
 	conn, err := tls.DialWithDialer(&net.Dialer{
