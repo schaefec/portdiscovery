@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"go/scanner"
 	"net"
 	"sync"
 	"time"
@@ -15,6 +16,8 @@ func main() {
 	hostPort = append(hostPort, "kube.opsb.rocks:433")
 	hostPort = append(hostPort, "kube.opsb.rocks:5443")
 	hostPort = append(hostPort, "kube.opsb.rocks:5443")
+
+	scanner.Scanner
 
 	channel := make(chan tls.ConnectionState, 1024)
 	done := make(chan bool)
