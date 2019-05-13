@@ -3,8 +3,8 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -14,14 +14,21 @@ func main() {
 
 	hostPort = append(hostPort, "kube.opsb.rocks:433")
 	hostPort = append(hostPort, "kube.opsb.rocks:5443")
+	hostPort = append(hostPort, "kube.opsb.rocks:5443")
 
 	channel := make(chan tls.ConnectionState, 1024)
 	done := make(chan bool)
 
+	var wg sync.WaitGroup
 	for _, hp := range hostPort {
-		go dialTLS(hp, channel)
+		wg.Add(1)
+		go dialTLS(hp, channel, &wg)
+
 	}
-	printState(channel, done)
+	go printState(channel, done)
+
+	wg.Wait() // Block until all producers have been terminated.
+
 	close(channel)
 
 	<-done
@@ -42,7 +49,8 @@ func printState(statechan <-chan tls.ConnectionState, done chan<- bool) {
 	}
 }
 
-func dialTLS(hostport string, ch chan<- tls.ConnectionState) {
+func dialTLS(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup) {
+	defer wg.Done()
 	fmt.Println("Connecting to:", hostport)
 	conn, err := tls.DialWithDialer(&net.Dialer{
 		Timeout: 500 * time.Millisecond,
@@ -50,7 +58,7 @@ func dialTLS(hostport string, ch chan<- tls.ConnectionState) {
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		log.Info("Error while creating connection: ", err)
+		fmt.Println(err)
 		return
 	}
 
