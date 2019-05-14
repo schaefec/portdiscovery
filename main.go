@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"strconv"
 
@@ -10,9 +9,9 @@ import (
 
 func main() {
 
-	t := hostscanner.NewScanner(func(state tls.ConnectionState) {
-		for _, cert := range state.PeerCertificates {
-			fmt.Println(cert.Subject, state.CipherSuite)
+	t := hostscanner.NewScanner(func(state *hostscanner.ScanResult) {
+		for _, cert := range state.GetTLSConnectionState() {
+			fmt.Println(cert.Subject)
 		}
 	})
 

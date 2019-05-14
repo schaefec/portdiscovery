@@ -16,27 +16,41 @@ type Scanner interface {
 	CloseAndAwaitTermination()
 }
 
+// ScanResult holds the result of the scans
+type ScanResult interface {
+	// Get tls.Coonnection state
+	GetTLSConnectionState() tls.ConnectionState
+}
+
 type scanner struct {
 	waitGroup            *sync.WaitGroup
-	states               chan tls.ConnectionState
+	results              chan ScanResult
 	done                 chan bool
 	closeTriggered       bool
 	maxParallelSemaphore chan struct{}
 }
 
+type scanResult struct {
+	tlsConnectionState tls.ConnectionState
+}
+
 // NewScanner creates a new scanner
-func NewScanner(accept func(tls.ConnectionState)) Scanner {
+func NewScanner(accept func(*ScanResult)) Scanner {
 	scanner := &scanner{
 		waitGroup:            &sync.WaitGroup{},
-		states:               make(chan tls.ConnectionState, 1024),
+		results:              make(chan ScanResult, 1024),
 		done:                 make(chan bool),
 		closeTriggered:       false,
 		maxParallelSemaphore: make(chan struct{}, 1024),
 	}
 
-	go consume(scanner.states, scanner.done, accept)
+	go consume(scanner.results, scanner.done, accept)
 
 	return scanner
+}
+
+func (r *scanResult) GetTLSConnectionState() tls.ConnectionState {
+	return r.tlsConnectionState
 }
 
 func (s *scanner) Enqueue(hostport string) error {
@@ -44,7 +58,7 @@ func (s *scanner) Enqueue(hostport string) error {
 		return fmt.Errorf("Enqueue cannot be called when scanner has been closed already")
 	}
 	s.waitGroup.Add(1)
-	go dialTLS(hostport, s.states, s.waitGroup, s.maxParallelSemaphore)
+	go dialTLS(hostport, s.results, s.waitGroup, s.maxParallelSemaphore)
 
 	return nil
 }
@@ -58,12 +72,12 @@ func (s *scanner) CloseAndAwaitTermination() {
 
 	fmt.Print("Exiting...")
 	s.waitGroup.Wait()
-	close(s.states)
+	close(s.results)
 	<-s.done
 	fmt.Println("done!")
 }
 
-func consume(ch <-chan tls.ConnectionState, done chan<- bool, accept func(tls.ConnectionState)) {
+func consume(ch <-chan ScanResult, done chan<- bool, accept func(*ScanResult)) {
 	for {
 		state, more := <-ch
 		if more {
@@ -74,7 +88,7 @@ func consume(ch <-chan tls.ConnectionState, done chan<- bool, accept func(tls.Co
 	}
 }
 
-func dialTLS(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup, maxParallel chan struct{}) {
+func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParallel chan struct{}) {
 	// Limit number of parallel connections.
 	maxParallel <- struct{}{}
 	defer func() {
@@ -97,5 +111,7 @@ func dialTLS(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup,
 
 	state := conn.ConnectionState()
 
-	ch <- state
+	ch <- &scanResult{
+		tlsConnectionState: state,
+	}
 }
