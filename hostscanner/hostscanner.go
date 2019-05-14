@@ -17,19 +17,21 @@ type Scanner interface {
 }
 
 type scanner struct {
-	waitGroup      *sync.WaitGroup
-	states         chan tls.ConnectionState
-	done           chan bool
-	closeTriggered bool
+	waitGroup            *sync.WaitGroup
+	states               chan tls.ConnectionState
+	done                 chan bool
+	closeTriggered       bool
+	maxParallelSemaphore chan struct{}
 }
 
 // NewScanner creates a new scanner
 func NewScanner(accept func(tls.ConnectionState)) Scanner {
 	scanner := &scanner{
-		waitGroup:      &sync.WaitGroup{},
-		states:         make(chan tls.ConnectionState, 1024),
-		done:           make(chan bool),
-		closeTriggered: false,
+		waitGroup:            &sync.WaitGroup{},
+		states:               make(chan tls.ConnectionState, 1024),
+		done:                 make(chan bool),
+		closeTriggered:       false,
+		maxParallelSemaphore: make(chan struct{}, 1024),
 	}
 
 	go consume(scanner.states, scanner.done, accept)
@@ -42,7 +44,7 @@ func (s *scanner) Enqueue(hostport string) error {
 		return fmt.Errorf("Enqueue cannot be called when scanner has been closed already")
 	}
 	s.waitGroup.Add(1)
-	go dialTLSInternal(hostport, s.states, s.waitGroup)
+	go dialTLS(hostport, s.states, s.waitGroup, s.maxParallelSemaphore)
 
 	return nil
 }
@@ -72,24 +74,26 @@ func consume(ch <-chan tls.ConnectionState, done chan<- bool, accept func(tls.Co
 	}
 }
 
-func dialTLSInternal(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup) {
+func dialTLS(hostport string, ch chan<- tls.ConnectionState, wg *sync.WaitGroup, maxParallel chan struct{}) {
+	// Limit number of parallel connections.
+	maxParallel <- struct{}{}
+	defer func() {
+		<-maxParallel
+	}()
 	defer wg.Done()
-	fmt.Println("Connecting to:", hostport)
+
 	conn, err := tls.DialWithDialer(&net.Dialer{
-		Timeout: 500 * time.Millisecond,
+		Timeout: 1000 * time.Millisecond,
 	}, "tcp", hostport, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
 	defer conn.Close()
 
 	conn.Handshake()
-
-	fmt.Println("Connection to:", hostport, "established")
 
 	state := conn.ConnectionState()
 
