@@ -35,7 +35,7 @@ type scanResult struct {
 }
 
 // NewScanner creates a new scanner
-func NewScanner(accept func(*ScanResult)) Scanner {
+func NewScanner(accept func(ScanResult)) Scanner {
 	scanner := &scanner{
 		waitGroup:            &sync.WaitGroup{},
 		results:              make(chan ScanResult, 1024),
@@ -49,7 +49,7 @@ func NewScanner(accept func(*ScanResult)) Scanner {
 	return scanner
 }
 
-func (r *scanResult) GetTLSConnectionState() tls.ConnectionState {
+func (r scanResult) GetTLSConnectionState() tls.ConnectionState {
 	return r.tlsConnectionState
 }
 
@@ -77,7 +77,7 @@ func (s *scanner) CloseAndAwaitTermination() {
 	fmt.Println("done!")
 }
 
-func consume(ch <-chan ScanResult, done chan<- bool, accept func(*ScanResult)) {
+func consume(ch <-chan ScanResult, done chan<- bool, accept func(ScanResult)) {
 	for {
 		state, more := <-ch
 		if more {
@@ -111,7 +111,7 @@ func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParal
 
 	state := conn.ConnectionState()
 
-	ch <- &scanResult{
+	ch <- scanResult{
 		tlsConnectionState: state,
 	}
 }
