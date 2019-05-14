@@ -10,12 +10,13 @@ import (
 func main() {
 
 	t := hostscanner.NewScanner(func(state hostscanner.ScanResult) {
+		fmt.Println(state.GetRemoteAddr())
 		for _, cert := range state.GetTLSConnectionState().PeerCertificates {
 			fmt.Println(cert.Subject)
 		}
 	})
 
-	for i := 1; i < 1024; i++ {
+	for i := 1; i < 65535; i++ {
 		t.Enqueue("localhost:" + strconv.Itoa(i))
 	}
 

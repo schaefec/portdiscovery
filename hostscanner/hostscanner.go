@@ -20,6 +20,8 @@ type Scanner interface {
 type ScanResult interface {
 	// Get tls.Coonnection state
 	GetTLSConnectionState() tls.ConnectionState
+	// Get net.Addr of remote host
+	GetRemoteAddr() net.Addr
 }
 
 type scanner struct {
@@ -32,6 +34,7 @@ type scanner struct {
 
 type scanResult struct {
 	tlsConnectionState tls.ConnectionState
+	connInfo           net.Addr
 }
 
 // NewScanner creates a new scanner
@@ -51,6 +54,10 @@ func NewScanner(accept func(ScanResult)) Scanner {
 
 func (r scanResult) GetTLSConnectionState() tls.ConnectionState {
 	return r.tlsConnectionState
+}
+
+func (r scanResult) GetRemoteAddr() net.Addr {
+	return r.connInfo
 }
 
 func (s *scanner) Enqueue(hostport string) error {
@@ -113,5 +120,6 @@ func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParal
 
 	ch <- scanResult{
 		tlsConnectionState: state,
+		connInfo:           conn.RemoteAddr(),
 	}
 }
