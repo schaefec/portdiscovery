@@ -38,13 +38,13 @@ type scanResult struct {
 }
 
 // NewScanner creates a new scanner
-func NewScanner(accept func(ScanResult)) Scanner {
+func NewScanner(maxParallel int, accept func(ScanResult)) Scanner {
 	scanner := &scanner{
 		waitGroup:            &sync.WaitGroup{},
-		results:              make(chan ScanResult, 1024),
+		results:              make(chan ScanResult, maxParallel),
 		done:                 make(chan bool),
 		closeTriggered:       false,
-		maxParallelSemaphore: make(chan struct{}, 1024),
+		maxParallelSemaphore: make(chan struct{}, maxParallel),
 	}
 
 	go consume(scanner.results, scanner.done, accept)

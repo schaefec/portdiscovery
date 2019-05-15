@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	t := hostscanner.NewScanner(func(state hostscanner.ScanResult) {
+	t := hostscanner.NewScanner(10000, func(state hostscanner.ScanResult) {
 		fmt.Println(state.GetRemoteAddr())
 		for _, cert := range state.GetTLSConnectionState().PeerCertificates {
 			fmt.Println(cert.Subject)
