@@ -37,6 +37,32 @@ type scanResult struct {
 	connInfo           net.Addr
 }
 
+// AllCipherSuites in a array
+var AllCipherSuites = map[uint16]string{
+	tls.TLS_RSA_WITH_RC4_128_SHA:                "TLS_RSA_WITH_RC4_128_SHA",
+	tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA:           "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA:            "TLS_RSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_RSA_WITH_AES_256_CBC_SHA:            "TLS_RSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA256:         "TLS_RSA_WITH_AES_128_CBC_SHA256",
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256:         "TLS_RSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384:         "TLS_RSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA:        "TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:    "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:    "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA:          "TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+	tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA:     "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:      "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:      "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256: "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256:   "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:   "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384: "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305:    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305:  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+}
+
 // NewScanner creates a new scanner
 func NewScanner(maxParallel int, accept func(ScanResult)) Scanner {
 	scanner := &scanner{
@@ -103,23 +129,29 @@ func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParal
 	}()
 	defer wg.Done()
 
-	conn, err := tls.DialWithDialer(&net.Dialer{
-		Timeout: 1000 * time.Millisecond,
-	}, "tcp", hostport, &tls.Config{
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		return
+	scan := func(cipher uint16) {
+		conn, err := tls.DialWithDialer(&net.Dialer{
+			Timeout: 1000 * time.Millisecond,
+		}, "tcp", hostport, &tls.Config{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		conn.Handshake()
+
+		state := conn.ConnectionState()
+
+		ch <- scanResult{
+			tlsConnectionState: state,
+			connInfo:           conn.RemoteAddr(),
+		}
 	}
 
-	defer conn.Close()
-
-	conn.Handshake()
-
-	state := conn.ConnectionState()
-
-	ch <- scanResult{
-		tlsConnectionState: state,
-		connInfo:           conn.RemoteAddr(),
+	for c := range AllCipherSuites {
+		scan(c)
 	}
 }

@@ -13,6 +13,7 @@ func main() {
 		fmt.Println(state.GetRemoteAddr())
 		for _, cert := range state.GetTLSConnectionState().PeerCertificates {
 			fmt.Println(cert.Subject)
+			fmt.Println(hostscanner.AllCipherSuites[state.GetTLSConnectionState().CipherSuite])
 		}
 	})
 
