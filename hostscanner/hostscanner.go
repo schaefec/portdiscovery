@@ -109,7 +109,6 @@ func (s *scanner) CloseAndAwaitTermination() {
 	s.waitGroup.Wait()
 	close(s.results)
 	<-s.done
-	fmt.Println("done!")
 }
 
 func consume(ch <-chan ScanResult, done chan<- bool, accept func(ScanResult)) {
