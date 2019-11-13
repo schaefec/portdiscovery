@@ -30,6 +30,7 @@ type scanner struct {
 	done                 chan bool
 	closeTriggered       bool
 	maxParallelSemaphore chan struct{}
+	doCipherScan         bool
 }
 
 type scanResult struct {
@@ -64,13 +65,14 @@ var AllCipherSuites = map[uint16]string{
 }
 
 // NewScanner creates a new scanner
-func NewScanner(maxParallel int, accept func(ScanResult)) Scanner {
+func NewScanner(maxParallel int, doCipherScan bool, accept func(ScanResult)) Scanner {
 	scanner := &scanner{
 		waitGroup:            &sync.WaitGroup{},
 		results:              make(chan ScanResult, maxParallel),
 		done:                 make(chan bool),
 		closeTriggered:       false,
 		maxParallelSemaphore: make(chan struct{}, maxParallel),
+		doCipherScan:         doCipherScan,
 	}
 
 	go consume(scanner.results, scanner.done, accept)
@@ -91,7 +93,7 @@ func (s *scanner) Enqueue(hostport string) error {
 		return fmt.Errorf("Enqueue cannot be called when scanner has been closed already")
 	}
 	s.waitGroup.Add(1)
-	go dialTLS(hostport, s.results, s.waitGroup, s.maxParallelSemaphore)
+	go dialTLS(hostport, s.results, s.waitGroup, s.maxParallelSemaphore, s.doCipherScan)
 
 	return nil
 }
@@ -121,7 +123,7 @@ func consume(ch <-chan ScanResult, done chan<- bool, accept func(ScanResult)) {
 	}
 }
 
-func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParallel chan struct{}) {
+func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParallel chan struct{}, doCipherScan bool) {
 	// Limit number of parallel connections.
 	maxParallel <- struct{}{}
 	defer func() {
@@ -129,11 +131,12 @@ func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParal
 	}()
 	defer wg.Done()
 
-	scan := func(cipher uint16) {
+	scan := func(ciphers []uint16) {
 		conn, err := tls.DialWithDialer(&net.Dialer{
 			Timeout: 1000 * time.Millisecond,
 		}, "tcp", hostport, &tls.Config{
 			InsecureSkipVerify: true,
+			CipherSuites:       ciphers,
 		})
 		if err != nil {
 			return
@@ -151,7 +154,12 @@ func dialTLS(hostport string, ch chan<- ScanResult, wg *sync.WaitGroup, maxParal
 		}
 	}
 
-	for c := range AllCipherSuites {
-		scan(c)
+	if doCipherScan {
+		for c := range AllCipherSuites {
+			scan([]uint16{c})
+		}
+	} else {
+		var ciphers []uint16
+		scan(ciphers)
 	}
 }
