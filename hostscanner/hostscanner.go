@@ -104,8 +104,7 @@ func (s *scanner) CloseAndAwaitTermination() {
 	}
 
 	s.closeTriggered = true
-
-	fmt.Print("Exiting...")
+	
 	s.waitGroup.Wait()
 	close(s.results)
 	<-s.done
